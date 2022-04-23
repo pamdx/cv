@@ -54,7 +54,7 @@ datadrivencv::build_network_logo(CV$entries_data)
 
 ```{r}
 if(params$pdf_mode){
- cat("View this CV [online](https://pamdx.github.io/personal_site/cv.html) with links")
+ cat("[View this CV online with links](https://pamdx.github.io/personal_site/cv.html)")
 } else {
  cat("[<i class='fas fa-download'></i> Download a PDF of this CV](https://github.com/pamdx/cv/raw/main/cv.pdf)")
 }

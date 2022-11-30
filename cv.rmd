@@ -54,9 +54,9 @@ datadrivencv::build_network_logo(CV$entries_data)
 
 ```{r}
 if(params$pdf_mode){
- cat("[View this CV online with links](https://pamdx.github.io/personal_site/cv.html)")
+ cat("[View this CV online with links](https://pamdx.github.io/cv/cv.html)")
 } else {
- cat("[<i class='fas fa-download'></i> Download a PDF of this CV](https://github.com/pamdx/cv/raw/main/cv.pdf)")
+ cat("[<i class='fas fa-download'></i> Download a PDF of this CV](https://pamdx.github.io/cv/cv.pdf)")
 }
 ```
 
@@ -100,6 +100,26 @@ CV %<>% print_text_block("intro")
 
 
 
+Experience {data-icon=suitcase}
+--------------------------------------------------------------------------------
+
+<!-- ::: aside -->
+<!-- ```{r} -->
+<!-- CV %<>% print_text_block('industy_experience_aside') -->
+<!-- ``` -->
+<!-- ::: -->
+
+```{r}
+CV %<>% print_section('experience')
+```
+
+<!-- These breaks just force a new page so section doesn't get cut off -->
+<br>
+<br>
+<br>
+
+
+
 Education {data-icon=graduation-cap data-concise=true}
 --------------------------------------------------------------------------------
 
@@ -118,23 +138,6 @@ CV %<>% print_section('education')
 
 
 
-Experience {data-icon=suitcase}
---------------------------------------------------------------------------------
-
-<!-- ::: aside -->
-<!-- ```{r} -->
-<!-- CV %<>% print_text_block('industy_experience_aside') -->
-<!-- ``` -->
-<!-- ::: -->
-
-```{r}
-CV %<>% print_section('experience')
-```
-
-<!-- These breaks just force a new page so section doesn't get cut off -->
-<br>
-<br>
-<br>
 
 Publications {data-icon=newspaper}
 --------------------------------------------------------------------------------

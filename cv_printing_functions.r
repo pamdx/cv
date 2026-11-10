@@ -110,13 +110,15 @@ create_CV_object <-  function(data_location,
       googlesheets4::read_sheet(data_location, sheet = sheet_id, skip = 1, col_types = "c")
     }
     cv$entries_data  <- read_gsheet(sheet_id = "entries")
-    cv$skills        <- read_gsheet(sheet_id = "language_skills")
+    cv$skills        <- read_gsheet(sheet_id = "it_skills")
+    cv$languages     <- read_gsheet(sheet_id = "language_skills")
     cv$text_blocks   <- read_gsheet(sheet_id = "text_blocks")
     cv$contact_info  <- read_gsheet(sheet_id = "contact_info")
   } else {
     # Want to go old-school with csvs?
     cv$entries_data <- readr::read_csv(paste0(data_location, "entries.csv"), skip = 1)
-    cv$skills       <- readr::read_csv(paste0(data_location, "language_skills.csv"), skip = 1)
+    cv$skills       <- readr::read_csv(paste0(data_location, "it_skills.csv"), skip = 1)
+    cv$languages    <- readr::read_csv(paste0(data_location, "language_skills.csv"), skip = 1)
     cv$text_blocks  <- readr::read_csv(paste0(data_location, "text_blocks.csv"), skip = 1)
     cv$contact_info <- readr::read_csv(paste0(data_location, "contact_info.csv"), skip = 1)
   }
@@ -138,6 +140,11 @@ create_CV_object <-  function(data_location,
       lubridate::dmy()
   }
 
+  # "current"/"present" (any case) are displayed as "Present"
+  format_date_label <- function(x){
+    ifelse(tolower(x) %in% c("current", "present", "now"), "Present", as.character(x))
+  }
+
   # Clean up entries dataframe to format we need it for printing
   cv$entries_data %<>%
     tidyr::unite(
@@ -157,10 +164,11 @@ create_CV_object <-  function(data_location,
       no_end = is.na(end),
       has_end = !no_end,
       timeline = dplyr::case_when(
-        no_start  & no_end  ~ "N/A",
-        no_start  & has_end ~ as.character(end),
-        has_start & no_end  ~ paste("Current", "-", start),
-        TRUE                ~ paste(end, "-", start)
+        no_start  & no_end  ~ "",
+        no_start  & has_end ~ format_date_label(end),
+        has_start & no_end  ~ paste(start, "\u2013", "Present"),
+        start == end        ~ as.character(start),
+        TRUE                ~ paste(start, "\u2013", format_date_label(end))
       )
     ) %>%
     dplyr::arrange(desc(parse_dates(end))) %>%
@@ -305,5 +313,204 @@ print_contact_info <- function(cv){
     "- <i class='fa fa-{icon}'></i> {contact}"
   ) %>% print()
 
+  invisible(cv)
+}
+
+
+
+# ------------------------------------------------------------------------------
+# Europass-inspired layout
+# Everything below prints raw HTML (no blank lines inside a block so pandoc
+# leaves it alone). Styling lives in dd_cv.css.
+# ------------------------------------------------------------------------------
+
+#' Escape HTML and convert markdown links / bold to HTML
+md_inline <- function(x){
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;", x, fixed = TRUE)
+  x <- gsub(">", "&gt;", x, fixed = TRUE)
+  x <- gsub("\\[([^\\]]+)\\]\\(([^)]+)\\)", "<a href=\"\\2\">\\1</a>", x, perl = TRUE)
+  x <- gsub("\\*\\*([^*]+)\\*\\*", "<strong>\\1</strong>", x, perl = TRUE)
+  x
+}
+
+# TRUE for NA / "" / "N/A"
+is_blank <- function(x) is.na(x) | trimws(x) == "" | x == "N/A"
+
+# Turn the "- a\n- b" bullet string built in create_CV_object() into a vector
+split_bullets <- function(x){
+  if (is_blank(x)) return(character(0))
+  b <- strsplit(sub("^- ", "", x), "\n- ", fixed = TRUE)[[1]]
+  b[nzchar(trimws(b))]
+}
+
+europass_entry <- function(dates, body_html){
+  paste0("<div class='ep-entry'><div class='ep-dates'>", dates, "</div>",
+         "<div class='ep-body'>", body_html, "</div></div>")
+}
+
+#' One item of the contact line. HTML: the sheet's link as is. PDF (printing): the email
+#' spelled out and URLs shortened (no protocol / www / trailing slash / .html), still clickable.
+contact_item <- function(x, pdf_mode){
+  pat <- "\\[([^\\]]+)\\]\\(([^)]+)\\)"
+  if (!pdf_mode || !grepl(pat, x, perl = TRUE)) return(md_inline(x))
+  url <- sub(paste0("^.*", pat, ".*$"), "\\2", x, perl = TRUE)
+  shown <- if (grepl("^mailto:", url)) {
+    sub("^mailto:", "", url)
+  } else {
+    url %>% sub("^https?://(www\\.)?", "", .) %>% sub("/$", "", .) %>% sub("\\.html?$", "", .)
+  }
+  paste0("<a href=\"", gsub("&", "&amp;", url, fixed = TRUE), "\">", gsub("&", "&amp;", shown, fixed = TRUE), "</a>")
+}
+
+#' Escape a string for use inside a CSS "..." string
+css_string <- function(x) gsub("\"", "\\\"", gsub("\\", "\\\\", x, fixed = TRUE), fixed = TRUE)
+
+#' Escape a string for use inside a JavaScript "..." string
+js_string <- function(x) gsub("<", "\\u003c", css_string(x), fixed = TRUE)
+
+#' Title, subtitle (rows `title` and `subtitle` of the text_blocks sheet) and contact line.
+#' Also sets the page footer text from the title.
+print_europass_header <- function(cv){
+  get_block <- function(label){
+    v <- dplyr::filter(cv$text_blocks, loc == label) %>% dplyr::pull(text)
+    if (length(v) == 0 || is.na(v[1])) "" else v[1]
+  }
+  title    <- get_block("title")
+  subtitle <- get_block("subtitle")
+
+  contact <- paste0("<span>", vapply(cv$contact_info$contact, contact_item, character(1), pdf_mode = cv$pdf_mode), "</span>",
+                    collapse = " <span class='ep-sep'>&bull;</span> ")
+  cat(paste0(
+    "<style>@page { @bottom-left { content: \"Curriculum vitae \u2013 ", css_string(title), "\"; } }</style>\n",
+    # browser tab title (and PDF metadata title): "CV - <title>"
+    "<script>document.title = \"CV - ", js_string(title), "\";</script>\n",
+    "<header class='ep-header'>\n",
+    "<div class='ep-name'>", md_inline(title), "</div>\n",
+    if (nzchar(subtitle)) paste0("<div class='ep-headline'>", md_inline(subtitle), "</div>\n") else "",
+    "<div class='ep-contact'>", contact, "</div>\n",
+    "</header>\n\n"))
+  invisible(cv)
+}
+
+#' PDF mode: turn <a href="url">label</a> into label<sup>n</sup> and record the url in cv$links
+#' (the numbered list is printed by print_europass_links()). Same url = same number.
+footnote_links <- function(cv, h){
+  pat <- "<a href=\"([^\"]+)\">([^<]*)</a>"
+  m <- gregexpr(pat, h, perl = TRUE)[[1]]
+  if (m[1] == -1) return(list(cv = cv, html = h))
+  for (k in regmatches(h, list(m))[[1]]) {
+    url   <- sub(pat, "\\1", k, perl = TRUE)
+    label <- sub(pat, "\\2", k, perl = TRUE)
+    idx   <- match(url, cv$links)
+    if (is.na(idx)) { cv$links <- c(cv$links, url); idx <- length(cv$links) }
+    h <- sub(k, paste0(label, "<sup>", idx, "</sup>"), h, fixed = TRUE)
+  }
+  list(cv = cv, html = h)
+}
+
+#' Markdown -> HTML for a vector of strings; in PDF mode links become footnotes
+inline_html <- function(cv, x){
+  out <- character(length(x))
+  for (i in seq_along(x)) {
+    h <- md_inline(x[i])
+    if (cv$pdf_mode) {
+      res <- footnote_links(cv, h)
+      cv <- res$cv
+      h  <- res$html
+    }
+    out[i] <- h
+  }
+  list(cv = cv, html = out)
+}
+
+#' Free-text block (e.g. the "intro" row of the text_blocks sheet)
+#' Use with `%<>%` so collected links are kept.
+print_europass_text <- function(cv, label, heading){
+  txt <- dplyr::filter(cv$text_blocks, loc == label) %>% dplyr::pull(text)
+  res <- inline_html(cv, txt)
+  cat(paste0("<section class='ep-section'>\n<h2>", heading, "</h2>\n<p class='ep-summary'>",
+             res$html, "</p>\n</section>\n\n"))
+  invisible(res$cv)
+}
+
+#' One section of the `entries` sheet (experience, education, ...)
+#' Use with `%<>%` so collected links are kept.
+print_europass_section <- function(cv, section_id, heading){
+  d <- dplyr::filter(cv$entries_data, section == section_id)
+  if (nrow(d) == 0) return(invisible(cv))
+
+  entries <- character(nrow(d))
+  for (i in seq_len(nrow(d))) {
+    # In the sheet, `loc` holds the institution/organiser and `institution` the place
+    sub_line <- c(d$loc[i], d$institution[i])
+    sub_line <- sub_line[!is_blank(sub_line)]
+    res <- inline_html(cv, sub_line); cv <- res$cv
+    sub_line <- paste(res$html, collapse = " \u00b7 ")
+
+    res <- inline_html(cv, d$title[i]); cv <- res$cv
+    title_html <- res$html
+
+    bullets <- split_bullets(d$description_bullets[i])
+    res <- inline_html(cv, bullets); cv <- res$cv
+    bullets <- res$html
+
+    entries[i] <- europass_entry(
+      d$timeline[i],
+      paste0("<h3>", title_html, "</h3>",
+             if (nzchar(sub_line)) paste0("<div class='ep-sub'>", sub_line, "</div>") else "",
+             if (length(bullets) > 0) paste0("<ul>", paste0("<li>", bullets, "</li>", collapse = ""), "</ul>") else "")
+    )
+  }
+
+  cat(paste0("<section class='ep-section'>\n<h2>", heading, "</h2>\n",
+             paste(entries, collapse = "\n"), "\n</section>\n\n"))
+  invisible(cv)
+}
+
+#' Numbered list of all links collected in PDF mode (matches the superscripts)
+print_europass_links <- function(cv, heading = "Links"){
+  if (length(cv$links) > 0) {
+    items <- paste0("<li><a href=\"", cv$links, "\">", cv$links, "</a></li>", collapse = "")
+    cat(paste0("<section class='ep-section'>\n<h2>", heading, "</h2>\n<ol class='ep-links'>",
+               items, "</ol>\n</section>\n\n"))
+  }
+  invisible(cv)
+}
+
+#' Europass-style language grid from the `language_skills` sheet (language, level)
+#' `level` is a CEFR level (A1-C2); the same level is shown for every skill column.
+print_europass_languages <- function(cv, heading = "Language skills"){
+  langs <- as.data.frame(cv$languages, stringsAsFactors = FALSE)
+
+  rows <- vapply(seq_len(nrow(langs)), function(i){
+    paste0("<tr><td class='lang'>", md_inline(langs$language[i]), "</td>",
+           strrep(paste0("<td>", md_inline(langs$level[i]), "</td>"), 5),
+           "</tr>")
+  }, character(1))
+
+  table_html <- paste0(
+    "<table class='ep-langs'><thead>",
+    "<tr><th></th><th>Listening</th><th>Reading</th><th>Spoken interaction</th><th>Spoken production</th><th>Writing</th></tr>",
+    "</thead><tbody>", paste(rows, collapse = ""), "</tbody></table>")
+
+  cat(paste0("<section class='ep-section'>\n<h2>", heading, "</h2>\n",
+             europass_entry("Language(s)", table_html), "\n</section>\n\n"))
+  invisible(cv)
+}
+
+#' IT skills from the `it_skills` sheet (skill, level), grouped by level in sheet order
+#' `level` is used as the row label (e.g. "Proficient user", "Independent user", "Basic user").
+print_europass_skills <- function(cv, heading = "IT skills"){
+  sk <- cv$skills
+  rows <- vapply(unique(sk$level), function(l){
+    paste0("<div class='ep-skill-row'><div class='ep-skill-level'>", md_inline(l), "</div>",
+           "<div class='ep-skill-list'>",
+           paste(md_inline(sk$skill[sk$level == l]), collapse = " <span class='ep-dot'>&middot;</span> "),
+           "</div></div>")
+  }, character(1))
+  cat(paste0("<section class='ep-section'>\n<h2>", heading, "</h2>\n",
+             europass_entry("IT skills", paste(rows, collapse = "")),
+             "\n</section>\n\n"))
   invisible(cv)
 }

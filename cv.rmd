@@ -1,19 +1,20 @@
 ---
-title: "Pierre-Ami Maudoux's CV"
-author: Pierre-Ami Maudoux
-date: "`r Sys.Date()`"
+pagetitle: "CV"
+lang: en
 params:
   pdf_mode:
     value: true
 output:
-  pagedown::html_resume:
-    css: ['dd_cv.css', 'resume']
+  pagedown::html_paged:
+    css: ['dd_cv.css']
     self_contained: true
+    toc: false
+    number_sections: false
 ---
 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(
-  results='asis', 
+  results = 'asis',
   echo = FALSE
 )
 
@@ -22,220 +23,44 @@ source("cv_printing_functions.r")
 
 # Read in all data and initialize a CV printer object
 CV <- create_CV_object(
-  data_location = "https://docs.google.com/spreadsheets/d/1ZvBze1Di0TIXBg3PieaCr5iR1vaI6u7RNdeLE9yVcdo",  
+  data_location = "https://docs.google.com/spreadsheets/d/1ZvBze1Di0TIXBg3PieaCr5iR1vaI6u7RNdeLE9yVcdo",
   pdf_mode = params$pdf_mode
 )
-
 ```
-
 
 ```{r}
-# When in pdf export mode the little dots are unaligned, so fix that with some conditional CSS.
-if(params$pdf_mode) {
-    cat("
-<style>
-:root{
-  --decorator-outer-offset-left: -6.5px;
-}
-</style>")
-}
+# Header: `title` and `subtitle` rows of the `text_blocks` sheet + links from `contact_info`
+CV %>% print_europass_header()
 ```
-
-
-Aside
-================================================================================
 
 ```{r}
-# Build interactive network of positions colored by section
-# and connected if they occurred in the same year
-datadrivencv::build_network_logo(CV$entries_data)
+# "intro" row of the `text_blocks` sheet
+CV %<>% print_europass_text("intro", heading = "About me")
 ```
-
 
 ```{r}
-if(params$pdf_mode){
- cat("[View this CV online with links](https://pamdx.github.io/cv/cv.html)")
-} else {
- cat("[<i class='fas fa-download'></i> Download a PDF of this CV](https://pamdx.github.io/cv/cv.pdf)")
-}
+# Sections of the `entries` sheet (the `section` column decides where a row goes)
+CV %<>% print_europass_section("experience",     heading = "Work experience")
+CV %<>% print_europass_section("education",      heading = "Education and training")
 ```
-
-Contact {#contact}
---------------------------------------------------------------------------------
 
 ```{r}
-CV %>% print_contact_info()
+# `language_skills` sheet (language, CEFR level)
+CV %>% print_europass_languages()
 ```
-
-
-
-IT Skills {#skills}
---------------------------------------------------------------------------------
 
 ```{r}
-CV %>% print_skill_bars()
+# `it_skills` sheet (skill, level)
+CV %>% print_europass_skills()
 ```
-
-
-
-Disclaimer {#disclaimer}
---------------------------------------------------------------------------------
-
-Made with the [datadrivencv](https://github.com/nstrayer/datadrivencv) R package.
-
-Last updated on `r format(Sys.time(), "%d/%m/%Y")`.
-
-
-
-Main
-================================================================================
-
-Pierre-Ami Maudoux {#title}
---------------------------------------------------------------------------------
 
 ```{r}
-# Note the special double pipe so we modify the CV object in place
-CV %<>% print_text_block("intro") 
+CV %<>% print_europass_section("publications",   heading = "Publications")
+CV %<>% print_europass_section("conferences",    heading = "Conferences and training delivered")
+CV %<>% print_europass_section("certifications", heading = "Courses and certifications")
 ```
-
-
-
-Experience {data-icon=suitcase}
---------------------------------------------------------------------------------
-
-<!-- ::: aside -->
-<!-- ```{r} -->
-<!-- CV %<>% print_text_block('industy_experience_aside') -->
-<!-- ``` -->
-<!-- ::: -->
 
 ```{r}
-CV %<>% print_section('experience')
+# PDF only: numbered list of the links shown as superscripts above
+CV %>% print_europass_links()
 ```
-
-<!-- These breaks just force a new page so section doesn't get cut off -->
-<br>
-<br>
-<br>
-
-
-
-Education {data-icon=graduation-cap data-concise=true}
---------------------------------------------------------------------------------
-
-```{r}
-CV %<>% print_section('education')
-```
-
-
-
-<!-- Research Experience {data-icon=laptop} -->
-<!-- -------------------------------------------------------------------------------- -->
-
-<!-- ```{r} -->
-<!-- CV %<>% print_section('research_positions') -->
-<!-- ``` -->
-
-
-
-
-Publications {data-icon=newspaper}
---------------------------------------------------------------------------------
-
-```{r}
-CV %<>% print_section('publications')
-```
-
-<!-- These breaks just force a new page so section doesn't get cut off -->
-<br>
-<br>
-<br>
-
-Conferences {data-icon=chalkboard-teacher}
---------------------------------------------------------------------------------
-
-```{r}
-CV %<>% print_section('conferences')
-```
-
-<!-- These breaks just force a new page so section doesn't get cut off -->
-<br>
-<br>
-<br>
-
-Courses & certifications {data-icon=certificate}
---------------------------------------------------------------------------------
-
-```{r}
-CV %<>% print_section('certifications')
-```
-
-<!-- These breaks just force a new page so section doesn't get cut off -->
-<br>
-<br>
-<br>
-
-<!-- Teaching Experience {data-icon=chalkboard-teacher} -->
-<!-- -------------------------------------------------------------------------------- -->
-
-<!-- ::: aside -->
-<!-- ```{r} -->
-<!-- CV %<>% print_text_block('teaching_experience_aside') -->
-<!-- ``` -->
-<!-- ::: -->
-
-<!-- ```{r} -->
-<!-- CV %<>% print_section('teaching_positions') -->
-<!-- ``` -->
-
-
-
-<!-- Selected Data Science Writing {data-icon=chart-line} -->
-<!-- -------------------------------------------------------------------------------- -->
-
-<!-- ::: aside -->
-<!-- ```{r} -->
-<!-- CV %<>% print_text_block('data_science_writing_aside') -->
-<!-- ``` -->
-<!-- ::: -->
-
-<!-- ```{r} -->
-<!-- CV %<>% print_section('data_science_writings') -->
-<!-- ``` -->
-
-
-
-<!-- Selected Press (About)  {data-icon=newspaper} -->
-<!-- -------------------------------------------------------------------------------- -->
-
-<!-- ```{r} -->
-<!-- CV %<>% print_section('about_me_press') -->
-<!-- ``` -->
-
-
-<!-- <br> -->
-<!-- <br> -->
-
-
-<!-- Selected Press (By)  {data-icon=newspaper} -->
-<!-- -------------------------------------------------------------------------------- -->
-
-<!-- ```{r} -->
-<!-- CV %<>% print_section('by_me_press') -->
-<!-- ``` -->
-
-
-
-<!-- Selected Publications, Posters, and Talks {data-icon=book} -->
-<!-- -------------------------------------------------------------------------------- -->
-
-<!-- ```{r} -->
-<!-- CV %<>% print_section('academic_articles') -->
-<!-- ``` -->
-
-
-
-```{r}
-CV %<>% print_links()
-```
-
